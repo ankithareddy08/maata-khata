@@ -1,0 +1,12 @@
+Who benefits, and roughly how many: India has over a crore kirana shops, and most of them give regular customers goods on credit. We are starting with Telugu-speaking shop owners in Telangana and Andhra Pradesh. That is roughly 8 lakh shops by our rough estimate, since the two states have about 7% of India's people. Each shop has dozens of regular credit customers, so the people who benefit are both the owners and the families who buy on credit from them. The owners who gain the most are the ones who never used a khata app because typing in English was too slow or too hard.
+
+What changes compared with today: Today the owner writes credit in a notebook or on a scrap of paper between customers, or tries to remember it till evening. Entries get missed, totals go wrong, and settling up turns into an argument from memory. With Maata Khata, the owner says the entry out loud while still serving, hears it read back in Telugu, and says "avunu" to save it. It takes a few seconds and no typing. Every entry has a date and the items, so when a customer says "I already paid", the owner can open the record and both of them can see it. The owner can also ask "Ramu baaki entha?" and hear the answer, and send a polite reminder on WhatsApp instead of an awkward conversation at the counter. Less money is lost to missed entries, and the owner spends less time doing accounts at night.
+
+How you'd know it worked: We would run a 4-week pilot with 20 kirana shops in Hyderabad and one smaller town. Targets:
+- At least 80% of credit entries in those shops are made by voice instead of paper.
+- An entry takes under 10 seconds from tapping the mic to saving.
+- At least 9 out of 10 read-backs are correct the first time, with no editing.
+- At least 14 of the 20 shops are still using it every day in week 4.
+- Owners report fewer "I already paid" disputes than in the month before.
+
+The main risk: If the app mishears a name or an amount in a noisy shop, and the owner saves it without noticing, they will stop trusting it and go back to the notebook. Strong accents and mixed Telugu, Hindi and English make this harder. We reduce this by never saving without a spoken or tapped yes, always reading the bill back, showing old and new balance, and allowing undo. A second risk is that the book lives on one phone, so a lost phone means lost records. A simple backup is the next thing we would add after the pilot.
