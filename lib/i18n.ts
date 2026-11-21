@@ -25,6 +25,8 @@ const te = {
   brandSub: "Maata Khata",
   savedOnPhone: "ఈ ఫోన్‌లోనే సేవ్",
   language: "భాష",
+  customers: "కస్టమర్లు",
+  close: "మూసివేయి",
   voice: {
     eyebrow: "వాయిస్ ఖాతా",
     title: "ఎవరికి ఏమి ఇచ్చారు?",
@@ -146,6 +148,8 @@ const hi: Strings = {
   brandSub: "बोलकर खाता",
   savedOnPhone: "इसी फ़ोन में सेव",
   language: "भाषा",
+  customers: "ग्राहक",
+  close: "बंद करें",
   voice: {
     eyebrow: "वॉइस खाता",
     title: "किसको क्या दिया?",
@@ -265,6 +269,8 @@ const en: Strings = {
   brandSub: "Speak your khata",
   savedOnPhone: "Saved on this phone",
   language: "Language",
+  customers: "Customers",
+  close: "Close",
   voice: {
     eyebrow: "Voice khata",
     title: "Who took what?",
