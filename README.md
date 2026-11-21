@@ -1,6 +1,6 @@
 # Maata Khata · మాట ఖాతా
 
-**A voice-first credit ledger (ఖాతా / udhaar book) for kirana shopkeepers.** Tap the mic and talk the way you already do at the counter — in Telugu, Hindi, English or a mix. Maata Khata understands the customer, items and prices, reads the bill back aloud, and saves it when you say **“అవును”**.
+**A voice-first credit ledger (ఖాతా / udhaar book) for kirana shopkeepers.** Tap the mic and talk the way you already do at the counter — in Telugu, Hindi, English or a mix. Maata Khata understands the customer, items and prices, reads the bill back aloud, and saves it when you say **“అవును”** (or **“हाँ”** / **“yes”**). A switch at the top changes the whole app — screens, read-back and reminders — between **తెలుగు, हिंदी and English**.
 
 Built for the Scaler × Wispr Flow hackathon *India Runs on Voice* — Small business track.
 
@@ -21,10 +21,10 @@ Spoken numbers (ఇరవై, నూట ఇరవై, pachaas), names in any scr
 
 ## How it works
 
-1. **Speech → text:** Sarvam `saaras:v4` (Telugu speech recognition).
+1. **Speech → text:** Sarvam `saaras:v4`, in the chosen language (te-IN, hi-IN or en-IN).
 2. **Text → ledger action:** Sarvam `sarvam-105b-conversations` returns JSON. The app then **validates** it against the real customer list — the AI only proposes and never saves on its own. If the AI is unreachable, an offline rule parser takes over.
-3. **Read-back:** Sarvam `bulbul:v3` speaks the bill in Telugu, then listens for a yes/no.
-4. **Ledger:** amounts are stored as whole paise in the browser (no server database). There's undo, a per-customer history, and a **WhatsApp reminder** button with a polite Telugu message.
+3. **Read-back:** Sarvam `bulbul:v3` speaks the bill in the chosen language, then listens for a yes/no.
+4. **Ledger:** amounts are stored as whole paise in the browser (no server database). There's undo, a per-customer history, and a **WhatsApp reminder** button with a polite message in the chosen language.
 
 The API key stays on the server. API routes only accept requests from the app's own pages.
 
@@ -64,5 +64,5 @@ Never commit `.env.local`.
 ## Limits & next steps
 
 - The ledger lives in one browser on one device. Next: sync and backup.
-- Voice prompts are in Telugu. Next: pick a language (Hindi, Tamil…) and use it for read-back.
+- Telugu, Hindi and English today. Adding another language (Tamil, Kannada…) means one more block of text in `lib/i18n.ts` plus its speech code; Sarvam already supports them.
 - WhatsApp reminders open WhatsApp with the message filled in; the shopkeeper chooses the contact.

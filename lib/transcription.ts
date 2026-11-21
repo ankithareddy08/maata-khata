@@ -68,6 +68,11 @@ export function originOk(request: Request): boolean {
   return request.headers.get("origin") === `${protocol}://${host}`;
 }
 
+/** Only the app's own languages reach the provider; anything else means Telugu. */
+export function speechLanguage(value: unknown): string {
+  return value === "hi-IN" || value === "en-IN" || value === "te-IN" ? value : "te-IN";
+}
+
 export function keyIsConfigured(key: string): boolean {
   return !!key.trim() && !/^(your_|paste_|replace_)/i.test(key.trim());
 }
@@ -87,7 +92,12 @@ export async function handleTranscription(request: Request, key: string, provide
   }
 
   let file: FormDataEntryValue | null;
-  try { file = (await request.formData()).get("file"); }
+  let language = "te-IN";
+  try {
+    const incoming = await request.formData();
+    file = incoming.get("file");
+    language = speechLanguage(incoming.get("language"));
+  }
   catch { return json({ code: "INVALID_AUDIO", error: "రికార్డింగ్ చదవలేకపోయాము. Record a new short clip." }, 400); }
   if (!(file instanceof File) || file.size === 0 || !MIME_TYPES.has(file.type.split(";")[0].toLowerCase())) {
     return json({ code: "INVALID_AUDIO", error: "సరైన ఆడియో లేదు. Please record a new audio clip." }, 400);
@@ -97,7 +107,7 @@ export async function handleTranscription(request: Request, key: string, provide
   const form = new FormData();
   form.append("file", file, file.name);
   form.append("model", "saaras:v4");
-  form.append("language_code", "te-IN");
+  form.append("language_code", language);
   form.append("mode", "transcribe");
 
   try {

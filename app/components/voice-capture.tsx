@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { transcribe, useRecorder, stopSpeaking } from "@/lib/client-voice";
 import { Icon } from "./icons";
+import { describe, type Lang, type Strings } from "@/lib/i18n";
 
 type Props = {
+  lang: Lang;
+  t: Strings;
   disabled: boolean;
   /** True while the review sheet is open, to light the last step. */
   reviewing: boolean;
@@ -12,12 +15,6 @@ type Props = {
   onText: (text: string, spoken: boolean) => Promise<string | undefined>;
 };
 
-const EXAMPLES = [
-  { text: "రాముకి పాలు 20, బియ్యం 50", tag: "బాకీ" },
-  { text: "రాము 30 రూపాయలు ఇచ్చాడు", tag: "చెల్లింపు" },
-  { text: "రాము బాకీ ఎంత?", tag: "ప్రశ్న" },
-];
-const STEPS = ["చెప్పండి", "అర్థం చేసుకుంటాం", "సరిచూసి సేవ్"];
 const BARS = 64;
 
 /** A ring of bars around the mic that follows the speaker's voice. */
@@ -62,7 +59,7 @@ function useWaveform(canvas: React.RefObject<HTMLCanvasElement | null>, active: 
   }, [canvas, active]);
 }
 
-export default function VoiceCapture({ disabled, reviewing, onText }: Props) {
+export default function VoiceCapture({ lang, t, disabled, reviewing, onText }: Props) {
   const recorder = useRecorder(20);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [working, setWorking] = useState(false);
@@ -109,30 +106,29 @@ export default function VoiceCapture({ disabled, reviewing, onText }: Props) {
       const audio = await recorder.start();
       if (!audio) return;
       setWorking(true);
-      await run(await transcribe(audio), true);
+      await run(await transcribe(audio, lang), true);
     } catch (cause) {
       setWorking(false);
-      setError(cause instanceof Error ? cause.message : "మళ్లీ ప్రయత్నించండి. Please try again.");
+      setError(describe(cause, lang));
     }
   }
 
   const busy = working || recorder.phase === "processing" || recorder.phase === "permission";
   const stage = recording || recorder.phase === "permission" ? 0 : busy ? 1 : reviewing ? 2 : -1;
   const micDisabled = (disabled && !recording) || configured === false || (busy && !recording);
-  const status = recording ? <>వింటున్నాం <span className="timer">0:{String(recorder.seconds).padStart(2, "0")}</span></>
-    : recorder.phase === "permission" ? "మైక్ అనుమతి ఇవ్వండి"
-    : busy ? "అర్థం చేసుకుంటున్నాం…"
-    : configured === false ? "వాయిస్ సెటప్ కాలేదు · టైప్ చేయండి"
-    : "నొక్కి మాట్లాడండి";
+  const status = recording ? <>{t.voice.listening} <span className="timer">0:{String(recorder.seconds).padStart(2, "0")}</span></>
+    : recorder.phase === "permission" ? t.voice.permission
+    : busy ? t.voice.understanding
+    : configured === false ? t.voice.notConfigured
+    : t.voice.tap;
 
   return <>
     <section className="console" ref={hero} aria-labelledby="voice-title">
       <div className="console-head">
-        <span className="eyebrow"><Icon name="sparkle" size={14} /> వాయిస్ ఖాతా</span>
-        <span className="langs" lang="en">తెలుగు · हिंदी · English</span>
+        <span className="eyebrow"><Icon name="sparkle" size={14} /> {t.voice.eyebrow}</span>
       </div>
-      <h1 id="voice-title">ఎవరికి ఏమి ఇచ్చారు?</h1>
-      <p className="console-sub">పేరు, వస్తువు, ధర చెప్పండి — లెక్క మేము రాస్తాం.</p>
+      <h1 id="voice-title">{t.voice.title}</h1>
+      <p className="console-sub">{t.voice.sub}</p>
 
       <div className="mic-stage" ref={micStage}>
         <canvas ref={canvas} className="wave" aria-hidden="true" />
@@ -142,20 +138,20 @@ export default function VoiceCapture({ disabled, reviewing, onText }: Props) {
       </div>
       <p className="mic-status" role="status" aria-live="polite">{status}</p>
 
-      <ol className="steps" aria-label="Progress">{STEPS.map((step, index) => <li key={step} className={index === stage ? "now" : index < stage ? "done" : ""}><span>{index < stage ? <Icon name="check" size={12} /> : index + 1}</span>{step}</li>)}</ol>
+      <ol className="steps" aria-label="Progress">{t.voice.steps.map((step, index) => <li key={step} className={index === stage ? "now" : index < stage ? "done" : ""}><span>{index < stage ? <Icon name="check" size={12} /> : index + 1}</span>{step}</li>)}</ol>
 
       {(heard || error) && <div className="feedback">
-        {heard && <p className="heard"><span lang="en">విన్నది</span>“{heard}”</p>}
+        {heard && <p className="heard"><span>{t.voice.heard}</span>“{heard}”</p>}
         {error && <p className="voice-error" role="alert">{error}</p>}
       </div>}
 
       <div className="examples">
-        <p>ఇలా చెప్పి చూడండి</p>
-        <div className="chips">{EXAMPLES.map((example) => <button key={example.text} type="button" className="chip" disabled={disabled || busy || recording} onClick={() => void run(example.text, false)}><em>{example.tag}</em>{example.text}</button>)}</div>
-        {!typing ? <button type="button" className="text-link" onClick={() => setTyping(true)}><Icon name="keyboard" size={16} /> టైప్ చేయండి <span lang="en">or paste Wispr Flow text</span></button>
+        <p>{t.voice.tryThese}</p>
+        <div className="chips">{t.voice.examples.map((example) => <button key={example.text} type="button" className="chip" disabled={disabled || busy || recording} onClick={() => void run(example.text, false)}><em>{example.tag}</em>{example.text}</button>)}</div>
+        {!typing ? <button type="button" className="text-link" onClick={() => setTyping(true)}><Icon name="keyboard" size={16} /> {t.voice.type} <span>{t.voice.typeHint}</span></button>
           : <form className="type-box" onSubmit={(event) => { event.preventDefault(); if (typed.trim()) void run(typed.trim(), false); }}>
             <label className="sr-only" htmlFor="typed-text">Type an entry</label>
-            <input id="typed-text" value={typed} onChange={(event) => setTyped(event.target.value)} placeholder="ramu ki paalu 20, biyyam 50" autoFocus disabled={disabled || busy} />
+            <input id="typed-text" value={typed} onChange={(event) => setTyped(event.target.value)} placeholder={t.voice.typePlaceholder} autoFocus disabled={disabled || busy} />
             <button className="send" type="submit" aria-label="Prepare entry" disabled={!typed.trim() || disabled || busy}><Icon name="chevron" size={18} /></button>
           </form>}
       </div>

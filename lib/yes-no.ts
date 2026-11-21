@@ -1,6 +1,6 @@
 // Spoken confirmation. "No" wins over "yes" so a hesitant answer never saves.
-const NO = ["కాదు", "వద్దు", "లేదు", "ఆగు", "ఆపు", "రద్దు", "మార్చు", "నహీ", "नहीं", "मत", "no", "nope", "cancel", "stop", "wrong", "nahi", "nahin", "vaddu", "kaadu", "ledu", "galat", "change"];
-const YES = ["అవును", "ఔను", "సరే", "సరి", "హా", "ఓకే", "చేయి", "సేవ్", "కరెక్ట్", "हाँ", "हां", "ठीक", "yes", "yeah", "yep", "ok", "okay", "save", "correct", "right", "haan", "ha", "han", "avunu", "aunu", "sare", "sari", "theek", "thik"];
+const NO = ["కాదు", "వద్దు", "లేదు", "ఆగు", "ఆపు", "రద్దు", "మార్చు", "నహీ", "नहीं", "नही", "ना", "मत", "रुको", "रुकिए", "गलत", "ग़लत", "रद्द", "बदलो", "बदलें", "बदलिए", "no", "nope", "cancel", "stop", "wrong", "nahi", "nahin", "vaddu", "kaadu", "ledu", "galat", "change"];
+const YES = ["అవును", "ఔను", "సరే", "సరి", "హా", "ఓకే", "చేయి", "సేవ్", "కరెక్ట్", "हाँ", "हां", "हा", "जी", "ठीक", "सही", "सेव", "बिल्कुल", "बिलकुल", "yes", "yeah", "yep", "ok", "okay", "save", "correct", "right", "haan", "ha", "han", "avunu", "aunu", "sare", "sari", "theek", "thik"];
 
 export function heardYesNo(text: string): "yes" | "no" | undefined {
   const words = text.normalize("NFC").toLocaleLowerCase().replace(/[.,!?।"'“”‘’]/g, " ").split(/\s+/).filter(Boolean);

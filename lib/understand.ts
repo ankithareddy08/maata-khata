@@ -1,14 +1,17 @@
 // AI understanding: turns free speech (Telugu, Hindi, English or mixed) into a
 // ledger draft. The model only proposes; everything is validated here and the
 // shopkeeper still confirms before anything is saved.
+import type { ProblemCode } from "./i18n";
+
 type Customer = { id: string; name: string };
 export type Understood =
   | { ok: true; kind: "credit" | "payment"; amount: string; items?: { label: string; amountPaise: number }[]; customerId?: string; newCustomerName?: string }
   | { ok: true; kind: "balance"; customerId: string }
-  | { ok: false; message: string };
+  | { ok: false; message: string; code?: ProblemCode };
 
 const MAX_PAISE = 100_000_000;
-const UNCLEAR = "అర్థం కాలేదు. పేరు, వస్తువు, ధర మళ్లీ చెప్పండి. / Not clear. Say the name, item and price again.";
+const UNCLEAR_TEXT = "అర్థం కాలేదు. పేరు, వస్తువు, ధర మళ్లీ చెప్పండి. / Not clear. Say the name, item and price again.";
+const UNCLEAR = { ok: false, message: UNCLEAR_TEXT, code: "UNCLEAR" } as const;
 
 export function buildMessages(text: string, customers: Customer[]) {
   const list = customers.slice(0, 300).map((customer) => `${customer.id}: ${customer.name}`).join("\n") || "(none yet)";
@@ -17,17 +20,17 @@ Speech may be Telugu, Hindi, English or a mix, in any script.
 
 Actions:
 - "credit": the customer took goods on credit / now owes money (e.g. "ramu ki paalu 20", "సీతకి బియ్యం 50 బాకీ", "deep 30rs dal").
-- "payment": the customer paid back money (ఇచ్చాడు, ఇచ్చింది, కట్టాడు, చెల్లించాడు, paid, gave, returned, jama, diya, de diya).
-- "balance": the shopkeeper asks how much a customer owes (ఎంత, బాకీ ఎంత, kitna, how much).
+- "payment": the customer paid back money (ఇచ్చాడు, ఇచ్చింది, కట్టాడు, చెల్లించాడు, paid, gave, returned, jama, diya, de diya, दिए, दिया, चुकाया, जमा किया).
+- "balance": the shopkeeper asks how much a customer owes (ఎంత, బాకీ ఎంత, kitna, कितना, कितना उधार, how much).
 - "unclear": anything else, several different actions, a correction, or a missing price.
 
 Existing customers (id: name):
 ${list}
 
 Rules:
-- "spokenName" is the customer's name exactly as spoken, in the spoken script, without suffixes like కి/కు/ki/ka/గారు.
-- "customerId" must be one of the ids listed above (match across scripts or small spelling changes: రాము = ramu = Raamu), or null if nobody matches. Never put a name in "customerId".
-- Convert number words to digits (ఇరవై=20, ముప్పై=30, యాభై=50, డెబ్బై=70, వంద=100, నూట యాభై=150, రెండు వందలు=200, బీస్=20, pachaas=50).
+- "spokenName" is the customer's name exactly as spoken, in the spoken script, without suffixes like కి/కు/గారు/ki/ka/ko/ne/को/ने/का/जी.
+- "customerId" must be one of the ids listed above (match across scripts or small spelling changes: రాము = रामू = ramu = Raamu), or null if nobody matches. Never put a name in "customerId".
+- Convert number words to digits (ఇరవై=20, ముప్పై=30, యాభై=50, డెబ్బై=70, వంద=100, నూట యాభై=150, రెండు వందలు=200, बीस=20, तीस=30, पचास=50, सौ=100, bees=20, pachaas=50).
 - For credit, list each item with its FINAL line price in rupees. If a quantity and unit rate are given (2 kg at 40), the price is 80. Put the quantity in the label ("బియ్యం 2 kg"). Keep labels short (just the item name, never the price), in the spoken language.
 - If any item has no price, use "unclear". Never invent prices.
 - For payment, set "amount" and leave items empty.
@@ -37,6 +40,9 @@ Examples (ids are illustrative):
 "రాముకి పాలు ఇరవై, బియ్యం యాభై" → {"action":"credit","spokenName":"రాము","customerId":"<ramu's id or null>","items":[{"label":"పాలు","price":20},{"label":"బియ్యం","price":50}],"amount":null}
 "కొత్త కస్టమర్ లక్ష్మి, పెరుగు ముప్పై" → {"action":"credit","spokenName":"లక్ష్మి","customerId":null,"items":[{"label":"పెరుగు","price":30}],"amount":null}
 "సీత వంద రూపాయలు ఇచ్చింది" → {"action":"payment","spokenName":"సీత","customerId":"<sita's id>","items":[],"amount":100}
+"रामू को दूध 20, चावल 50" → {"action":"credit","spokenName":"रामू","customerId":"<ramu's id or null>","items":[{"label":"दूध","price":20},{"label":"चावल","price":50}],"amount":null}
+"रामू ने 30 रुपये दिए" → {"action":"payment","spokenName":"रामू","customerId":"<ramu's id>","items":[],"amount":30}
+"how much does ramu owe" → {"action":"balance","spokenName":"ramu","customerId":"<ramu's id>","items":[],"amount":null}
 "ramu ka kitna baaki hai" → {"action":"balance","spokenName":"ramu","customerId":"<ramu's id>","items":[],"amount":null}
 
 Return only JSON: {"action":"credit|payment|balance|unclear","spokenName":string|null,"customerId":string|null,"items":[{"label":string,"price":number}],"amount":number|null}`;
@@ -52,7 +58,7 @@ function toPaise(value: unknown): number | undefined {
 const rupees = (paise: number) => (paise / 100).toFixed(paise % 100 ? 2 : 0);
 const cleanLabel = (value: unknown) => typeof value === "string" ? value.normalize("NFC").replace(/\s+/g, " ").trim().slice(0, 80) : "";
 
-const priceWords = "(?:rs\\.?|rupees?|rupaye|rupay|రూపాయలు|రూపాయల|రూపాయి|రూ\\.?|₹)";
+const priceWords = "(?:rs\\.?|rupees?|rupaye|rupay|రూపాయలు|రూపాయల|రూపాయి|రూ\\.?|रुपये|रुपए|रुपया|₹)";
 /** "paalu 20 rupees" with price ₹20 → "paalu". Quantities like "rice 2 kg" are kept. */
 export function stripPrice(label: string, paise: number): string {
   const price = rupees(paise).replace(".", "\\.");
@@ -63,45 +69,45 @@ export function stripPrice(label: string, paise: number): string {
 
 /** Validate untrusted model output against the real customer list. */
 export function validateUnderstanding(raw: unknown, customers: Customer[]): Understood {
-  if (!raw || typeof raw !== "object") return { ok: false, message: UNCLEAR };
+  if (!raw || typeof raw !== "object") return UNCLEAR;
   const data = raw as Record<string, unknown>;
   const action = data.action;
   const existing = typeof data.customerId === "string" ? customers.find((customer) => customer.id === data.customerId) : undefined;
-  let newName = cleanLabel(data.spokenName ?? data.newCustomerName).replace(/\s*(?:గారికి|గారు|కి|కు)$/u, "").slice(0, 60);
+  let newName = cleanLabel(data.spokenName ?? data.newCustomerName).replace(/\s*(?:గారికి|గారు|కి|కు)$/u, "").replace(/\s+(?:ji|जी|ko|को|ne|ने|ka|का|ki|की|ke|के)$/iu, "").slice(0, 60);
   // A "new" name that equals a saved name is that customer.
   const sameName = newName ? customers.find((customer) => customer.name.toLocaleLowerCase() === newName.toLocaleLowerCase()) : undefined;
   const customer = existing ?? sameName;
   if (customer) newName = "";
 
   if (action === "balance") {
-    return customer ? { ok: true, kind: "balance", customerId: customer.id } : { ok: false, message: "ఈ పేరుతో కస్టమర్ లేరు. / No saved customer with that name." };
+    return customer ? { ok: true, kind: "balance", customerId: customer.id } : { ok: false, message: "ఈ పేరుతో కస్టమర్ లేరు. / No saved customer with that name.", code: "NO_CUSTOMER" };
   }
   if (action === "payment") {
-    if (!customer) return { ok: false, message: "డబ్బులు ఇచ్చిన కస్టమర్ పేరు దొరకలేదు. / A payment needs a saved customer." };
+    if (!customer) return { ok: false, message: "డబ్బులు ఇచ్చిన కస్టమర్ పేరు దొరకలేదు. / A payment needs a saved customer.", code: "PAYMENT_NO_CUSTOMER" };
     const paise = toPaise(data.amount);
-    return paise ? { ok: true, kind: "payment", customerId: customer.id, amount: rupees(paise) } : { ok: false, message: UNCLEAR };
+    return paise ? { ok: true, kind: "payment", customerId: customer.id, amount: rupees(paise) } : UNCLEAR;
   }
   if (action === "credit") {
-    if (!customer && !newName) return { ok: false, message: UNCLEAR };
+    if (!customer && !newName) return UNCLEAR;
     const rawItems = Array.isArray(data.items) ? data.items.slice(0, 20) : [];
     const items: { label: string; amountPaise: number }[] = [];
     for (const item of rawItems) {
-      if (!item || typeof item !== "object") return { ok: false, message: UNCLEAR };
+      if (!item || typeof item !== "object") return UNCLEAR;
       const paise = toPaise((item as Record<string, unknown>).price);
       const label = paise ? stripPrice(cleanLabel((item as Record<string, unknown>).label), paise) : "";
-      if (!label || !paise) return { ok: false, message: UNCLEAR };
+      if (!label || !paise) return UNCLEAR;
       items.push({ label, amountPaise: paise });
     }
     const target = customer ? { customerId: customer.id } : { newCustomerName: newName };
     if (items.length) {
       const total = items.reduce((sum, item) => sum + item.amountPaise, 0);
-      if (total > MAX_PAISE) return { ok: false, message: UNCLEAR };
+      if (total > MAX_PAISE) return UNCLEAR;
       return { ok: true, kind: "credit", ...target, amount: rupees(total), items };
     }
     const paise = toPaise(data.amount);
-    return paise ? { ok: true, kind: "credit", ...target, amount: rupees(paise) } : { ok: false, message: UNCLEAR };
+    return paise ? { ok: true, kind: "credit", ...target, amount: rupees(paise) } : UNCLEAR;
   }
-  return { ok: false, message: UNCLEAR };
+  return UNCLEAR;
 }
 
 /** Pull the first JSON object out of model text (tolerates code fences or think blocks). */

@@ -4,16 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { prepareRecording } from "@/lib/audio";
 import { parseVoiceCommand } from "@/lib/voice-command";
 import type { Understood } from "@/lib/understand";
+import { Problem, SPEECH_CODE, type Lang, type ProblemCode } from "@/lib/i18n";
 
 type Customer = { id: string; name: string };
 export type RecorderPhase = "idle" | "permission" | "recording" | "processing";
 
-function micError(cause: unknown): string {
+function micError(cause: unknown): Problem {
   const name = cause instanceof Error ? cause.name : "";
-  if (name === "NotAllowedError" || name === "SecurityError") return "మైక్ అనుమతి ఇవ్వండి. Allow microphone access in the browser and try again.";
-  if (name === "NotFoundError") return "మైక్ కనిపించలేదు. Connect a microphone and try again.";
-  if (name === "NotReadableError") return "మైక్ వేరే యాప్‌లో ఉంది. Close other apps using the mic and try again.";
-  return cause instanceof Error && cause.message ? cause.message : "రికార్డింగ్ మొదలవలేదు. Use a recent Chrome or Edge browser.";
+  if (name === "NotAllowedError" || name === "SecurityError") return new Problem("MIC_DENIED");
+  if (name === "NotFoundError") return new Problem("MIC_MISSING");
+  if (name === "NotReadableError") return new Problem("MIC_BUSY");
+  return cause instanceof Problem ? cause : new Problem("NO_RECORDER");
 }
 
 /** Tap to start, tap to stop. Resolves with a 16 kHz mono WAV, or null if cancelled. */
@@ -55,7 +56,7 @@ export function useRecorder(maxSeconds: number) {
     return new Promise((resolve, reject) => {
       settle.current = resolve;
       void (async () => {
-        if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") { reject(new Error("ఈ బ్రౌజర్‌లో రికార్డింగ్ లేదు. Open the app in a recent Chrome or Edge.")); return; }
+        if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") { reject(new Problem("NO_RECORDER")); return; }
         setPhase("permission");
         try {
           const live = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
@@ -71,7 +72,7 @@ export function useRecorder(maxSeconds: number) {
             samples.current = new Uint8Array(node.fftSize);
           } catch { /* the waveform is decoration only */ }
           const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type));
-          if (!mimeType) throw new Error("ఈ బ్రౌజర్ ఆడియో ఫార్మాట్ సపోర్ట్ చేయదు. Try Chrome or Edge.");
+          if (!mimeType) throw new Problem("NO_RECORDER");
           const media = new MediaRecorder(live, { mimeType, audioBitsPerSecond: 64_000 });
           const chunks: Blob[] = [];
           recorder.current = media;
@@ -84,9 +85,9 @@ export function useRecorder(maxSeconds: number) {
             try {
               const prepared = await prepareRecording(new Blob(chunks, { type: media.mimeType }));
               setPhase("idle");
-              if (prepared.details.peak < 0.001) { reject(new Error("మీ గొంతు వినిపించలేదు. Your voice was not captured; check the microphone.")); return; }
+              if (prepared.details.peak < 0.001) { reject(new Problem("SILENT")); return; }
               resolve(prepared.audio);
-            } catch (cause) { setPhase("idle"); reject(cause instanceof Error ? cause : new Error("Recording failed.")); }
+            } catch (cause) { setPhase("idle"); reject(cause instanceof Error ? cause : new Problem("RETRY")); }
           };
           media.start();
           setSeconds(0);
@@ -94,7 +95,7 @@ export function useRecorder(maxSeconds: number) {
           const began = Date.now();
           timers.current.push(setInterval(() => setSeconds(Math.floor((Date.now() - began) / 1000)), 250));
           timers.current.push(setTimeout(() => stop(), maxSeconds * 1000));
-        } catch (cause) { cleanup(); setPhase("idle"); reject(new Error(micError(cause))); }
+        } catch (cause) { cleanup(); setPhase("idle"); reject(micError(cause)); }
       })();
     });
   }
@@ -107,13 +108,22 @@ export function useRecorder(maxSeconds: number) {
   return { phase, seconds, start, stop, cancel, level };
 }
 
-export async function transcribe(audio: Blob, signal?: AbortSignal): Promise<string> {
+const SERVER_PROBLEMS: Record<string, ProblemCode> = {
+  SETUP_REQUIRED: "SETUP_REQUIRED", KEY_REJECTED: "KEY_REJECTED", CREDITS: "LIMIT", RATE_LIMIT: "LIMIT",
+  TIMEOUT: "TIMEOUT", NETWORK: "NETWORK", NO_SPEECH: "NO_WORDS", AUDIO_DURATION: "RETRY", AUDIO_FORMAT: "RETRY",
+};
+
+/** Speech to text in the chosen language. Throws a Problem the screen can translate. */
+export async function transcribe(audio: Blob, lang: Lang, signal?: AbortSignal): Promise<string> {
   const form = new FormData();
   form.set("file", audio, "speech.wav");
-  const response = await fetch("/api/transcribe", { method: "POST", body: form, signal });
+  form.set("language", SPEECH_CODE[lang]);
+  let response: Response;
+  try { response = await fetch("/api/transcribe", { method: "POST", body: form, signal }); }
+  catch { throw new Problem("NETWORK"); }
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "మాటలు అర్థం కాలేదు. Speech service failed; try again.");
-  if (typeof result.transcript !== "string" || !result.transcript.trim()) throw new Error("మాటలు వినిపించలేదు. No words heard; try again.");
+  if (!response.ok) throw new Problem(SERVER_PROBLEMS[String(result.code)] ?? "RETRY", typeof result.error === "string" ? result.error : undefined);
+  if (typeof result.transcript !== "string" || !result.transcript.trim()) throw new Problem("NO_WORDS");
   return result.transcript.trim();
 }
 
@@ -133,12 +143,12 @@ let current: HTMLAudioElement | null = null;
 let speechToken = 0;
 export function stopSpeaking() { speechToken++; current?.pause(); current = null; }
 
-/** Speak Telugu text. Resolves when finished (or immediately if speech is unavailable). */
-export async function speak(text: string): Promise<void> {
+/** Speak text in the chosen language. Resolves when finished (or at once if speech is unavailable). */
+export async function speak(text: string, lang: Lang): Promise<void> {
   stopSpeaking();
   const token = speechToken;
   try {
-    const response = await fetch("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }), signal: AbortSignal.timeout(15_000) });
+    const response = await fetch("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, language: SPEECH_CODE[lang] }), signal: AbortSignal.timeout(15_000) });
     if (!response.ok || token !== speechToken) return;
     const { audio, type } = await response.json() as { audio: string; type: string };
     if (token !== speechToken) return;
@@ -147,14 +157,3 @@ export async function speak(text: string): Promise<void> {
     await new Promise<void>((resolve) => { player.onended = () => resolve(); player.onerror = () => resolve(); player.onpause = () => resolve(); player.play().catch(() => resolve()); });
   } catch { /* speech is a bonus; the screen always shows the same text */ }
 }
-
-const rupeeWords = (paise: number) => `${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })} రూపాయలు`;
-export const readBack = {
-  credit: (name: string, paise: number, itemCount: number, after: number) =>
-    `${name}కి ${itemCount > 1 ? `${itemCount} వస్తువులు, ` : ""}మొత్తం ${rupeeWords(paise)} బాకీ. మొత్తం బాకీ ${rupeeWords(after)} అవుతుంది. సేవ్ చేయాలా?`,
-  payment: (name: string, paise: number, after: number) =>
-    `${name} ${rupeeWords(paise)} ఇచ్చారు. ఇంకా ${rupeeWords(after)} బాకీ ఉంటుంది. సేవ్ చేయాలా?`,
-  undo: () => "చివరి నమోదు రద్దు చేయాలా?",
-  saved: () => "సేవ్ అయింది.",
-  balance: (name: string, paise: number) => paise > 0 ? `${name} బాకీ ${rupeeWords(paise)}.` : `${name} బాకీ ఏమీ లేదు.`,
-};

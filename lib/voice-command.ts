@@ -5,37 +5,43 @@ export type VoiceCommandResult =
   | { ok: false; message: string };
 
 type Token = { value: string; start: number; end: number };
-const creditWords = new Set(["బాకీ", "బాకీకి", "బాకీగా", "బాకీలో", "due", "dues", "credit"]);
+const creditWords = new Set(["బాకీ", "బాకీకి", "బాకీగా", "బాకీలో", "due", "dues", "credit", "उधार", "udhaar", "udhar"]);
 const paymentWords = new Set([
   "చెల్లించాడు", "చెల్లించారు", "చెల్లించా", "చెల్లించింది",
   "అందాయి", "అందింది", "ఇచ్చాడు", "ఇచ్చారు", "ఇచ్చింది", "కట్టాడు", "కట్టారు", "కట్టింది", "paid", "payment", "repayment", "received", "gave", "given", "returned", "jama", "చెల్లింపు",
+  "दिए", "दिया", "दी", "diye", "diya", "चुकाए", "चुकाया", "chukaya", "जमा", "भुगतान",
 ]);
 const correctionWords = new Set([
   "కాదు", "కాదండి", "కాకుండా", "వద్దు", "చేయకు", "చేయొద్దు", "రద్దు", "బదులు",
   "మార్చు", "మార్చండి", "సవరించు", "సవరించండి", "తప్పు", "లేదులేదు",
   "no", "not", "cancel", "undo", "instead", "sorry", "correction",
+  "नहीं", "मत", "गलत", "ग़लत", "रद्द", "बदलो",
 ]);
 const multipleActionWords = new Set([
   "మరియు", "అలాగే", "తర్వాత", "తరువాత", "చేసి", "మళ్లీ", "మళ్ళీ", "and", "then", "also", "plus",
+  "और", "aur", "फिर", "भी",
 ]);
-const queryWords = new Set(["ఎంత", "చెప్పు", "చెప్పండి", "బ్యాలెన్స్", "మిగిలిన", "మిగిలింది", "balance"]);
+const queryWords = new Set(["ఎంత", "చెప్పు", "చెప్పండి", "బ్యాలెన్స్", "మిగిలిన", "మిగిలింది", "balance", "कितना", "कितने", "kitna", "बकाया"]);
 const amountMultipliers = new Set([
   "వంద", "వందలు", "వందల", "వెయ్యి", "వేయి", "వేలు", "లక్ష", "లక్షలు", "కోటి", "కోట్లు",
   "hundred", "thousand", "lakh", "lakhs", "crore", "crores", "k",
+  "सौ", "हज़ार", "हजार", "लाख", "करोड़",
 ]);
 const fillerWords = new Set([
   "పేరుతో", "పేరున", "పేరు", "మీద", "ఖాతాలో", "ఖాతాకు", "కు", "కి", "గారికి", "కోసం",
   "మొత్తం", "డబ్బులు", "డబ్బు", "రూ", "రూపాయలు", "రూపాయల", "రూపాయలను", "రూపాయల్ని", "రూపాయి", "రూపాయ",
   "నమోదు", "చేయి", "చేయండి", "చెయ్యి", "చెయ్యండి", "చేయాలి", "రాయి", "రాయండి", "చేర్చు", "చేర్చండి", "చేర్చాలి",
   "జోడించు", "జోడించండి", "దయచేసి", "అని", "ఎంట్రీ", "rupees", "rupee", "rs", "inr", "please",
+  "को", "ko", "ने", "ne", "रुपये", "रुपए", "रुपया", "रु", "rupaye", "rupay", "पैसे", "लिखो", "लिखिए", "जी",
 ]);
-const itemConnectors = new Set(["మరియు", "and"]);
+const itemConnectors = new Set(["మరియు", "and", "और", "aur"]);
 const totalWords = new Set(["మొత్తం", "మొత్తము", "మొత్తంగా", "మొత్తానికి", "టోటల్", "total", "subtotal", "grand"]);
 const itemForbiddenWords = new Set([
   ...amountMultipliers,
   "నిన్న", "రేపు", "ఈరోజు", "నేడు", "yesterday", "today", "tomorrow",
   "లీటరు", "లీటర్", "లీటర్లు", "లీటర్ల", "కిలో", "కిలోలు", "కిలోల", "గ్రాము", "గ్రాములు", "గ్రాముల",
   "kg", "kgs", "g", "gm", "grams", "litre", "litres", "liter", "liters", "ml", "per", "each", "rate", "unit", "units", "quantity", "qty", "x",
+  "किलो", "लीटर", "ग्राम", "पैकेट", "दर्जन", "नया", "ग्राहक", "नकद",
   "pack", "packs", "packet", "packets", "piece", "pieces", "bottle", "bottles", "carton", "cartons", "ప్యాకెట్", "ప్యాకెట్లు", "ప్యాకెట్ల", "పీస్", "పీసులు", "సీసా", "సీసాలు",
   "paid", "payment", "repayment", "received", "gave", "given", "returned", "jama", "refund", "discount", "తగ్గింపు",
   "minus", "less", "subtract", "deduct", "reduce", "remove", "off",
@@ -58,8 +64,9 @@ const familiarDatives = new Map([
 
 function normalize(text: string, preserveCase = false): string {
   const normalized = text.normalize("NFC").replace(/[౦-౯]/g, (digit) => String(digit.charCodeAt(0) - 0x0c66))
+    .replace(/[०-९]/g, (digit) => String(digit.charCodeAt(0) - 0x0966))
     .replace(/[\u200c\u200d]/g, "")
-    .replace(/(\d)(rs|rupees?|రూ|రూపాయలు|రూపాయల|రూపాయి)(?=$|[\s,;:.])/giu, "$1 $2");
+    .replace(/(\d)(rs|rupees?|రూ|రూపాయలు|రూపాయల|రూపాయి|रुपये|रुपए|रु)(?=$|[\s,;:.])/giu, "$1 $2");
   return preserveCase ? normalized : normalized.toLowerCase();
 }
 
@@ -85,7 +92,7 @@ function hasPurchaseMarker(segment: string): boolean {
 }
 
 function firstPurchaseSegment(text: string): string {
-  const split = /[,;]|(?:^|\s)(?:and|మరియు)(?=$|\s)/u.exec(text);
+  const split = /[,;]|(?:^|\s)(?:and|మరియు|और|aur)(?=$|\s)/u.exec(text);
   return split ? text.slice(0, split.index) : text;
 }
 
@@ -94,7 +101,7 @@ function failure(message: string): { ok: false; message: string } { return { ok:
 type TargetResult = { ok: true; target: CustomerTarget; instruction: string; displayInstruction: string } | { ok: false; message: string };
 
 function resolveTarget(text: string, displayText: string, customers: Customer[]): TargetResult {
-  const prefix = /^(?:(?:new\s+(?:name|customer))|(?:customer|name)|(?:కొత్త\s+(?:కస్టమర్|పేరు))|కస్టమర్|పేరు)(?:\s*[:,-]\s*|\s+)/u.exec(text);
+  const prefix = /^(?:(?:new\s+(?:name|customer))|(?:customer|name)|(?:కొత్త\s+(?:కస్టమర్|పేరు))|కస్టమర్|పేరు|(?:(?:नया|नए)\s+(?:ग्राहक|नाम))|(?:naya\s+grahak)|ग्राहक)(?:\s*[:,-]\s*|\s+)/u.exec(text);
   const offset = prefix?.[0].length ?? 0;
   const body = text.slice(offset);
   const displayBody = displayText.slice(offset);
